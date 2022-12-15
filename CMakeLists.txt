@@ -13,3 +13,4 @@ target_include_directories(apcc PUBLIC include)
 
 # libraries-cpp
 target_link_libraries(apcc PUBLIC -pg -no-pie)
+target_link_libraries(apcc PUBLIC fmt)
