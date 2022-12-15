@@ -5,4 +5,13 @@
 #include <pthread.h>
 
 #include <cglm/cglm.h>
-#include <stb/stb_image_write.h>
+
+#include "defines.h"
+#include "frame.h"
+
+
+int main(int argc, char** argv)
+{
+
+    return EXIT_SUCCESS;
+}
