@@ -110,11 +110,15 @@ namespace Program
 
             Sphere sph({0, 0, -1}, 0.5);
             Sphere sph2({0, -100.5f, -1}, 100);
-            HitRecord record;
 
+            Timer frame_timer;
+
+            frame_timer.start();
             ff.for_each_pixel(
                 [&](const Frame& frame, Pixel* pixel, uint32_t x, uint32_t y)
                 {
+                    HitRecord record;
+
                     float u = to(float, x) / (frame.w - 1);
                     float v = to(float, y) / (frame.h - 1);
                     LightRay r(origin, lower_left + u * horizontal + v * vertical - origin);
@@ -134,6 +138,9 @@ namespace Program
 
                     Frame::set_color(color, pixel);
                 });
+            frame_timer.finish();
+
+            std::cout << fmt::format("Frame time: {}ms\n", frame_timer.duration_ms);
 
             ff.to_png("result.png");
             return EXIT_SUCCESS;
