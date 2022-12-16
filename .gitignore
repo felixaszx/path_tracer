@@ -35,3 +35,5 @@
 build/
 .cache/
 *.trace
+result.png
+profile.png

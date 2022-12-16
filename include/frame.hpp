@@ -4,7 +4,6 @@
 #include <iostream>
 #include <string>
 #include <functional>
-#include <stb/stb_image_write.h>
 #include "glms.hpp"
 
 class Frame
@@ -21,7 +20,7 @@ class Frame
 
     void set_pixel(glm::vec4 color, bool linear = true);
     void to_png(std::string file_name);
-    void for_each_pixel(std::function<void(uint8_t*)> function);
+    void for_each_pixel(std::function<void(Frame* frame, uint8_t*)> function);
 };
 
 #endif // FRAME_HPP
