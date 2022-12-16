@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "glms.hpp"
+#include "tools.hpp"
 #include "frame.hpp"
 
 namespace Program
@@ -27,6 +28,67 @@ namespace Program
         }
     };
 
+    struct HitRecord
+    {
+        glm::vec3 point;
+        glm::vec3 normal;
+        float t;
+
+        bool front_face;
+
+        inline void set_face_normal(const LightRay& r, const glm::vec3 outward_normal)
+        {
+            front_face = dot(r.dir, outward_normal) < 0;
+            normal = front_face ? outward_normal : -outward_normal;
+        }
+    };
+
+    struct Sphere
+    {
+        glm::vec3 center;
+        float radius;
+
+        Sphere()
+        {
+        }
+        Sphere(glm::vec3 point, float r)
+            : center(point),
+              radius(r)
+        {
+        }
+
+        bool hit(LightRay& ray, float t_min, float t_max, HitRecord& record)
+        {
+            glm::vec3 oc = ray.origin - center;
+            auto a = glm::dot(ray.dir, ray.dir);
+            auto b = glm::dot(oc, ray.dir);
+            float c = glm::dot(oc, oc) - radius * radius;
+            float discriminant = b * b - a * c;
+
+            if (discriminant < 0)
+            {
+                return false;
+            }
+
+            float squard = sqrt(discriminant);
+
+            auto root = (-b - squard) / a;
+            if (root < t_min || t_max < root)
+            {
+                root = (-b + squard) / a;
+                if (root < t_min || t_max < root)
+                    return false;
+            }
+
+            record.t = root;
+            record.point = ray.at(record.t);
+            glm::vec3 outward_normal = (record.point - center) / radius;
+            record.set_face_normal(ray, outward_normal);
+
+            return true;
+        }
+    };
+
     class Program
     {
       public:
@@ -34,7 +96,7 @@ namespace Program
         {
             const uint32_t FRAME_WIDTH = 1920;
             const uint32_t FRAME_HEIGHT = 1080;
-            const float FRAME_ASPECT = static_cast<float>(FRAME_WIDTH) / static_cast<float>(FRAME_HEIGHT);
+            const float FRAME_ASPECT = to(float, FRAME_WIDTH) / to(float, FRAME_HEIGHT);
 
             Frame ff(FRAME_WIDTH, FRAME_HEIGHT, 4);
             float viewport_height = 2.0f;
@@ -46,41 +108,23 @@ namespace Program
             glm::vec3 vertical = {0, viewport_height, 0};
             glm::vec3 lower_left = origin - 0.5f * horizontal - 0.5f * vertical - glm::vec3(0, 0, focal_length);
 
-            auto hit_sphere = [](glm::vec3 point, float r, LightRay light) -> float
-            {
-                glm::vec3 oc = light.origin - point;
-                auto a = glm::dot(light.dir, light.dir);
-                auto b = glm::dot(oc, light.dir);
-                float c = glm::dot(oc, oc) - r * r;
-                float discriminant = b * b - a * c;
-
-                if (discriminant < 0)
-                {
-                    return -1.0f;
-                }
-                else
-                {
-                    return (-b - sqrt(discriminant)) / (a);
-                }
-            };
+            Sphere sph({0, 0, -1}, 0.5);
+            Sphere sph2({0, -100.5f, -1}, 100);
+            HitRecord record;
 
             ff.for_each_pixel(
                 [&](const Frame& frame, Pixel* pixel, uint32_t x, uint32_t y)
                 {
-                    float u = (float)x / (frame.w - 1);
-                    float v = (float)y / (frame.h - 1);
+                    float u = to(float, x) / (frame.w - 1);
+                    float v = to(float, y) / (frame.h - 1);
                     LightRay r(origin, lower_left + u * horizontal + v * vertical - origin);
                     glm::vec3 direction = glm::normalize(r.dir);
                     float t = 0.5 * (direction.y + 1.0);
                     glm::vec4 color =
                         (1.0f - t) * glm::vec4(1.0, 1.0, 1.0, 1.0) + t * glm::vec4(0.5f, 0.7f, 1.0f, 1.0f);
 
-                    t = hit_sphere(glm::vec3(0, 0, -1.0f), 0.5, r);
-                    if (t > 0)
-                    {
-                        glm::vec3 N = glm::normalize(r.at(t) - glm::vec3(0, 0, -1));
-                        color = glm::vec4(0.5f * glm::vec3(N.x + 1, N.y + 1, N.z + 1), 1.0f);
-                    }
+                    
+                
 
                     Frame::set_color(color, pixel);
                 });
