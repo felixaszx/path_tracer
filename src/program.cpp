@@ -123,8 +123,14 @@ namespace Program
                     glm::vec4 color =
                         (1.0f - t) * glm::vec4(1.0, 1.0, 1.0, 1.0) + t * glm::vec4(0.5f, 0.7f, 1.0f, 1.0f);
 
-                    
-                
+                    if (sph2.hit(r, 0, 100000, record))
+                    {
+                        color = {0.5f * (record.normal + glm::vec3(1, 1, 1)), 1.0f};
+                    }
+                    if (sph.hit(r, 0, 100000, record))
+                    {
+                        color = {0.5f * (record.normal + glm::vec3(1, 1, 1)), 1.0f};
+                    }
 
                     Frame::set_color(color, pixel);
                 });
