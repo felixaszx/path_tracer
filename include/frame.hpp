@@ -6,11 +6,13 @@
 #include <functional>
 #include "glms.hpp"
 
+using Pixel = uint8_t;
+
 class Frame
 {
   private:
-    uint8_t* cursor;
-    uint8_t* pixels;
+    Pixel* cursor;
+    Pixel* pixels;
 
   public:
     int w, h, channel;
@@ -18,9 +20,11 @@ class Frame
     Frame(int fw, int fh, int fchannel);
     ~Frame();
 
-    void set_pixel(glm::vec4 color, bool linear = true);
+    uint32_t total_pixels();
     void to_png(std::string file_name);
-    void for_each_pixel(std::function<void(Frame* frame, uint8_t*)> function);
+    void for_each_pixel(std::function<void(const Frame& frame, Pixel* pixel, uint32_t x, uint32_t y)> function);
+
+    static void set_color(glm::vec4 color, Pixel* pixel, bool linear = true);
 };
 
 #endif // FRAME_HPP

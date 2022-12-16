@@ -8,7 +8,7 @@ Frame::Frame(int fw, int fh, int fchannel)
       h(fh),
       channel(fchannel)
 {
-    pixels = new uint8_t[w * h * channel];
+    pixels = new Pixel[w * h * channel];
     cursor = pixels;
 }
 
@@ -17,7 +17,30 @@ Frame::~Frame()
     delete[] pixels;
 }
 
-void Frame::set_pixel(glm::vec4 color, bool linear)
+uint32_t Frame::total_pixels()
+{
+    return w * h;
+}
+
+void Frame::to_png(std::string file_name)
+{
+    stbi_flip_vertically_on_write(true);
+    stbi_write_png(file_name.c_str(), w, h, channel, pixels, w * channel);
+    stbi_flip_vertically_on_write(false);
+}
+
+void Frame::for_each_pixel(std::function<void(const Frame& frame, Pixel* pixel, uint32_t x, uint32_t y)> function)
+{
+    for (int y = h - 1; y >= 0; y--)
+    {
+        for (int x = 0; x < w; x++)
+        {
+            function(*this, (pixels + channel * x) + y * w * channel, x, y);
+        }
+    }
+}
+
+void Frame::set_color(glm::vec4 color, Pixel* pixel, bool linear)
 {
     float factor = 1.0f;
     if (linear)
@@ -25,22 +48,8 @@ void Frame::set_pixel(glm::vec4 color, bool linear)
         factor = 255.0f;
     }
 
-    for (int i = 0; i < channel; i++)
+    for (int i = 0; i < 4; i++)
     {
-        cursor[i] = static_cast<uint8_t>(factor * color[i]);
-    }
-    cursor += channel;
-}
-
-void Frame::to_png(std::string file_name)
-{
-    stbi_write_png(file_name.c_str(), w, h, channel, pixels, w * channel);
-}
-
-void Frame::for_each_pixel(std::function<void(Frame* frame, uint8_t*)> function)
-{
-    for (int i = 0; i < w * h * channel; i += channel)
-    {
-        function(this, pixels + i);
+        pixel[i] = static_cast<Pixel>(factor * color[i]);
     }
 }
