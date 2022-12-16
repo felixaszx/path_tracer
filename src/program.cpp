@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "glms.hpp"
 #include "tools.hpp"
@@ -43,7 +44,12 @@ namespace Program
         }
     };
 
-    struct Sphere
+    struct Hittable
+    {
+        virtual bool hit(LightRay& r, float t_min, float t_max, HitRecord& rec) = 0;
+    };
+
+    struct Sphere : public Hittable
     {
         glm::vec3 center;
         float radius;
@@ -57,7 +63,7 @@ namespace Program
         {
         }
 
-        bool hit(LightRay& ray, float t_min, float t_max, HitRecord& record)
+        bool hit(LightRay& ray, float t_min, float t_max, HitRecord& record) override
         {
             glm::vec3 oc = ray.origin - center;
             auto a = glm::dot(ray.dir, ray.dir);
@@ -89,6 +95,29 @@ namespace Program
         }
     };
 
+    struct HitList
+    {
+        std::vector<std::shared_ptr<Hittable>> objs;
+        bool hit(LightRay& ray, float t_min, float t_max, HitRecord& record)
+        {
+            HitRecord tmp_rec;
+            bool hit_anything = false;
+            float closest_so_far = t_max;
+
+            for (int i = 0; i < objs.size(); i++)
+            {
+                if (objs[i]->hit(ray, t_min, closest_so_far, tmp_rec))
+                {
+                    hit_anything = true;
+                    closest_so_far = tmp_rec.t;
+                    record = tmp_rec;
+                }
+            }
+
+            return hit_anything;
+        }
+    };
+
     class Program
     {
       public:
@@ -108,11 +137,11 @@ namespace Program
             glm::vec3 vertical = {0, viewport_height, 0};
             glm::vec3 lower_left = origin - 0.5f * horizontal - 0.5f * vertical - glm::vec3(0, 0, focal_length);
 
-            Sphere sph({0, 0, -1}, 0.5);
-            Sphere sph2({0, -100.5f, -1}, 100);
+            HitList list;
+            list.objs.push_back(std::make_shared<Sphere>(glm::vec3(0.0f, -100.5f, -1.0f), 100.0f));
+            list.objs.push_back(std::make_shared<Sphere>(glm::vec3(0.0f, 0.0f, -1.0f), 0.5f));
 
             Timer frame_timer;
-
             frame_timer.start();
             ff.for_each_pixel(
                 [&](const Frame& frame, Pixel* pixel, uint32_t x, uint32_t y)
@@ -127,11 +156,7 @@ namespace Program
                     glm::vec4 color =
                         (1.0f - t) * glm::vec4(1.0, 1.0, 1.0, 1.0) + t * glm::vec4(0.5f, 0.7f, 1.0f, 1.0f);
 
-                    if (sph2.hit(r, 0, 100000, record))
-                    {
-                        color = {0.5f * (record.normal + glm::vec3(1, 1, 1)), 1.0f};
-                    }
-                    if (sph.hit(r, 0, 100000, record))
+                    if (list.hit(r, 0, std::numeric_limits<float>::infinity(), record))
                     {
                         color = {0.5f * (record.normal + glm::vec3(1, 1, 1)), 1.0f};
                     }
