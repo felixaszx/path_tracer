@@ -24,7 +24,7 @@ class Frame
 
     uint32_t total_pixels();
     void to_png(std::string file_name);
-    void for_each_pixel(PixelFunction function, int max_thread = 15);
+    void for_each_pixel(PixelFunction function, int max_thread = 4);
 
     static void set_color(glm::vec4 color, Pixel* pixel, bool linear = true);
 };

@@ -220,6 +220,40 @@ glm::vec3 cal_ray_color(const Ray& r, HitList& list, float depth)
     return (1.0f - t) * glm::vec3(1.0f, 1.0f, 1.0f) + t * glm::vec3(0.5f, 0.7f, 1.0f);
 }
 
+glm::vec3 non_recursive_ray_color(const Ray& r, HitList& list, float depth)
+{
+    Ray tmp_r = r;
+    glm::vec3 color(1.0f);
+
+    while (depth > 0)
+    {
+        HitRecord record;
+        if (list.hit(tmp_r, 0.001f, std::numeric_limits<float>::infinity(), record))
+        {
+            glm::vec3 attenuation;
+            if (record.mat_->scatter(tmp_r, record, attenuation, tmp_r))
+            {
+                color *= attenuation;
+                depth--;
+            }
+            else
+            {
+                color *= glm::vec3(0.0f);
+                break;
+            }
+        }
+        else
+        {
+            glm::vec3 direction = glm::normalize(r.direction_);
+            float t = 0.5 * (direction.y + 1.0f);
+            color *= ((1.0f - t) * glm::vec3(1.0f, 1.0f, 1.0f) + t * glm::vec3(0.5f, 0.7f, 1.0f));
+            break;
+        }
+    }
+
+    return color;
+}
+
 inline HitList list;
 void cal_pixel(Frame* frame, Frame::Pixel* pixel, int x, int y)
 {
@@ -247,8 +281,8 @@ int main(int argc, char** argv)
 
     auto material_ground = std::make_shared<lambertian>(glm::vec3(0.8, 0.8, 0.0));
     auto material_center = std::make_shared<lambertian>(glm::vec3(0.7, 0.3, 0.3));
-    auto material_left = std::make_shared<Metal>(glm::vec3(0.8, 0.8, 0.8), 0.3f);
-    auto material_right = std::make_shared<Metal>(glm::vec3(0.8, 0.6, 0.2), 0.0f);
+    auto material_left = std::make_shared<Metal>(glm::vec3(1.0, 1.0, 1.0), 0.0f);
+    auto material_right = std::make_shared<Metal>(glm::vec3(0.8, 0.6, 0.2), 1.0f);
 
     list.objs.push_back(std::make_shared<Sphere>(glm::vec3(0.0, -100.5, -1.0), 100.0, material_ground));
     list.objs.push_back(std::make_shared<Sphere>(glm::vec3(0.0, 0.0, -1.0), 0.5, material_center));
@@ -257,7 +291,7 @@ int main(int argc, char** argv)
 
     Timer timer;
     timer.start();
-    frame.for_each_pixel(cal_pixel, 10);
+    frame.for_each_pixel(cal_pixel, 15);
     std::cout << timer.finish().duration_ms << "ms" << std::endl;
 
     frame.to_png("result.png");
