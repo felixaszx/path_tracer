@@ -93,6 +93,51 @@ struct Metal : Material
     }
 };
 
+struct Dielectric : Material
+{
+    float ir_;
+
+    Dielectric(float ir)
+        : ir_(ir)
+    {
+    }
+
+    static float reflectance(float cosine, float ref_idx)
+    {
+        // Schlick's approximation for reflectance.
+        float r0 = (1.0f - ref_idx) / (1.0f + ref_idx);
+        r0 = r0 * r0;
+        return r0 + (1.0f - r0) * pow((1.0f - cosine), 5.0f);
+    }
+
+    bool scatter(const Ray& r_in, const HitRecord& record, glm::vec3& attenuation, Ray& scattered) const override
+    {
+        attenuation = glm::vec3(1.0f, 1.0f, 1.0f);
+        float refraction_ratio = record.front_face_ ? (1.0f / ir_) : ir_;
+
+        glm::vec3 r_dir = glm::normalize(r_in.direction_);
+        double cos_theta = fmin(dot(-r_dir, record.normal_), 1.0);
+        double sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+
+        bool cannot_refract = refraction_ratio * sin_theta > 1.0;
+        glm::vec3 direction;
+
+        if (cannot_refract || reflectance(cos_theta, refraction_ratio) > get_random(0.0f, 1.0f))
+        {
+
+            direction = glm::reflect(r_dir, record.normal_);
+        }
+        else
+        {
+            direction = glm::refract(r_dir, record.normal_, refraction_ratio);
+        }
+
+        scattered = Ray(record.point_, direction);
+
+        return true;
+    }
+};
+
 struct HitObj
 {
     virtual bool hit(const Ray& r, float min_t, float max_t, HitRecord& record) = 0;
@@ -138,7 +183,8 @@ struct Sphere : HitObj
 
         record.t_ = root;
         record.point_ = r.at(record.t_);
-        record.normal_ = (record.point_ - center_) / radius_;
+        glm::vec3 outward_normal_ = (record.point_ - center_) / radius_;
+        record.set_face_normal(r, outward_normal_);
         record.mat_ = mat_;
         return true;
     }
@@ -170,33 +216,36 @@ struct HitList : HitObj
 
 struct Camera
 {
-    float view_w_;
-    float view_h_;
-    float view_focal_;
-    glm::vec3 origin_;
 
+    glm::vec3 origin_;
     glm::vec3 horizontal_;
     glm::vec3 vertical_;
     glm::vec3 lower_left_;
 
-    Camera(glm::vec3 origin, float view_w, float view_h, float view_focal)
-        : origin_(origin),
-          view_w_(view_w),
-          view_h_(view_h),
-          view_focal_(view_focal)
+    Camera(glm::vec3 eye, glm::vec3 look_at, glm::vec3 up, float height, float fov, float aspect)
     {
-        horizontal_ = {view_w_, 0, 0};
-        vertical_ = {0, view_h_, 0};
-        lower_left_ = origin - 0.5f * vertical_ - 0.5f * horizontal_ - glm::vec3(0, 0, view_focal_);
+        float thera = glm::radians(fov);
+        float h = tan(thera / 2.0f);
+        float view_height = height * h;
+        float view_width = aspect * view_height;
+
+        glm::vec3 w = eye - look_at;
+        glm::vec3 u = glm::normalize(glm::cross(up, w));
+        glm::vec3 v = glm::normalize(glm::cross(w, u));
+
+        origin_ = eye;
+        horizontal_ = u * view_width;
+        vertical_ = v * view_height;
+        lower_left_ = origin_ - 0.5f * horizontal_ - 0.5f * vertical_ - w;
     }
 
-    Ray get_ray(float x, float y)
+    Ray get_ray(float x, float y) const
     {
         return Ray(origin_, lower_left_ + x * horizontal_ + y * vertical_ - origin_);
     }
 };
 
-glm::vec3 cal_ray_color(const Ray& r, HitList& list, float depth)
+glm::vec3 cal_ray_color(const Ray& r, HitList& list, int depth)
 {
     if (depth <= 0)
     {
@@ -220,7 +269,7 @@ glm::vec3 cal_ray_color(const Ray& r, HitList& list, float depth)
     return (1.0f - t) * glm::vec3(1.0f, 1.0f, 1.0f) + t * glm::vec3(0.5f, 0.7f, 1.0f);
 }
 
-glm::vec3 non_recursive_ray_color(const Ray& r, HitList& list, float depth)
+glm::vec3 non_recursive_ray_color(const Ray& r, HitList& list, int depth)
 {
     Ray tmp_r = r;
     glm::vec3 color(1.0f);
@@ -238,16 +287,14 @@ glm::vec3 non_recursive_ray_color(const Ray& r, HitList& list, float depth)
             }
             else
             {
-                color *= glm::vec3(0.0f);
-                break;
+                return glm::vec3(0.0f);
             }
         }
         else
         {
             glm::vec3 direction = glm::normalize(r.direction_);
             float t = 0.5 * (direction.y + 1.0f);
-            color *= ((1.0f - t) * glm::vec3(1.0f, 1.0f, 1.0f) + t * glm::vec3(0.5f, 0.7f, 1.0f));
-            break;
+            return color * ((1.0f - t) * glm::vec3(1.0f, 1.0f, 1.0f) + t * glm::vec3(0.5f, 0.7f, 1.0f));
         }
     }
 
@@ -257,9 +304,9 @@ glm::vec3 non_recursive_ray_color(const Ray& r, HitList& list, float depth)
 inline HitList list;
 void cal_pixel(Frame* frame, Frame::Pixel* pixel, int x, int y)
 {
-    static Camera camera({0, 0, 0}, float(frame->w) / float(frame->h) * 2.0f, 2.0f, 1.0f);
+    static Camera camera({-2, 2, 1}, {0, 0, -1}, {0, 1, 0}, 8.0f, 20.0f, 16.0f / 9.0f);
     static int samples = 100;
-    static float max_depth = 50.0f;
+    static int max_depth = 50;
 
     glm::vec3 color = {0, 0, 0};
 
@@ -269,7 +316,7 @@ void cal_pixel(Frame* frame, Frame::Pixel* pixel, int x, int y)
         float v = float(y + get_random(-0.5f, 0.5f)) / (frame->h - 1);
 
         Ray r = camera.get_ray(u, v);
-        color += cal_ray_color(r, list, max_depth);
+        color += non_recursive_ray_color(r, list, max_depth);
     }
 
     Frame::set_color(glm::vec4(color / float(samples), 1.0f), pixel);
@@ -279,20 +326,21 @@ int main(int argc, char** argv)
 {
     Frame frame(1920, 1080, 4);
 
-    auto material_ground = std::make_shared<lambertian>(glm::vec3(0.8, 0.8, 0.0));
+    auto material_ground = std::make_shared<Metal>(glm::vec3(0.7, 0.4, 0.7), 0.8f);
     auto material_center = std::make_shared<lambertian>(glm::vec3(0.7, 0.3, 0.3));
-    auto material_left = std::make_shared<Metal>(glm::vec3(1.0, 1.0, 1.0), 0.0f);
-    auto material_right = std::make_shared<Metal>(glm::vec3(0.8, 0.6, 0.2), 1.0f);
+    auto material_left = std::make_shared<Dielectric>(1.5f);
+    auto material_right = std::make_shared<Metal>(glm::vec3(0.3, 0.3, 0.6), 0.05f);
 
     list.objs.push_back(std::make_shared<Sphere>(glm::vec3(0.0, -100.5, -1.0), 100.0, material_ground));
     list.objs.push_back(std::make_shared<Sphere>(glm::vec3(0.0, 0.0, -1.0), 0.5, material_center));
-    list.objs.push_back(std::make_shared<Sphere>(glm::vec3(-1.0, 0.0, -1.0), 0.5, material_left));
-    list.objs.push_back(std::make_shared<Sphere>(glm::vec3(1.0, 0.0, -1.0), 0.5, material_right));
+    list.objs.push_back(std::make_shared<Sphere>(glm::vec3(-1.01, 0.0, -1.0), 0.5, material_left));
+    list.objs.push_back(std::make_shared<Sphere>(glm::vec3(-1.01, 0.0, -1.0), -0.48, material_left));
+    list.objs.push_back(std::make_shared<Sphere>(glm::vec3(1.01, 0.0, -1.0), 0.5, material_right));
 
     Timer timer;
     timer.start();
     frame.for_each_pixel(cal_pixel, 15);
-    std::cout << timer.finish().duration_ms << "ms" << std::endl;
+    std::cout << timer.finish().duration_s << "s" << std::endl;
 
     frame.to_png("result.png");
     return 0;
