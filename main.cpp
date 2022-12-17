@@ -124,7 +124,6 @@ struct Dielectric : Material
 
         if (cannot_refract || reflectance(cos_theta, refraction_ratio) > get_random(0.0f, 1.0f))
         {
-
             direction = glm::reflect(r_dir, record.normal_);
         }
         else
