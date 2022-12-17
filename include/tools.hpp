@@ -6,20 +6,7 @@
 
 #include <fmt/core.h>
 
-#define to(type, x) static_cast<type>(x)
-
-inline float get_random(float l, float r)
-{
-    static std::default_random_engine eng;
-    std::uniform_real_distribution dist6(l, r);
-
-    return dist6(eng);
-}
-
-inline float get_random(float r)
-{
-    return get_random(0.0f, r);
-}
+#include "glms.hpp"
 
 class Timer
 {
@@ -35,13 +22,23 @@ class Timer
     {
         begin_point = std::chrono::high_resolution_clock::now();
     }
-    void finish()
+
+    Timer& finish()
     {
         end_point = std::chrono::high_resolution_clock::now();
         auto ss = std::chrono::duration_cast<std::chrono::milliseconds>(end_point - begin_point);
         duration_ms = ss.count();
         duration_s = (float)duration_ms / 1000;
+
+        return *this;
     }
 };
+
+float get_random(float min, float max)
+{
+    static thread_local std::mt19937 generator;
+    std::uniform_real_distribution<float> distribution(min, max);
+    return distribution(generator);
+}
 
 #endif // TOOLS_HPP

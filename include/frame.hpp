@@ -6,10 +6,12 @@
 #include <functional>
 #include "glms.hpp"
 
-using Pixel = uint8_t;
-
 class Frame
 {
+  public:
+    typedef uint8_t Pixel;
+    typedef void (*PixelFunction)(Frame* frame, Pixel* pixel, int x, int y);
+
   private:
     Pixel* cursor;
     Pixel* pixels;
@@ -22,7 +24,7 @@ class Frame
 
     uint32_t total_pixels();
     void to_png(std::string file_name);
-    void for_each_pixel(std::function<void(const Frame& frame, Pixel* pixel, uint32_t x, uint32_t y)> function);
+    void for_each_pixel(PixelFunction function, bool single_threaded = false);
 
     static void set_color(glm::vec4 color, Pixel* pixel, bool linear = true);
 };

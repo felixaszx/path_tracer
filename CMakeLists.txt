@@ -6,11 +6,11 @@ set(CMAKE_CXX_EXTENSIONS off)
 
 file(GLOB_RECURSE SRC src/*.cpp src/*.c)
 add_executable(apcc main.cpp ${SRC})
-target_compile_options(apcc PUBLIC -pg -no-pie)
+target_compile_options(apcc PUBLIC)
 
 # includes-cpp
 target_include_directories(apcc PUBLIC include)
 
 # libraries-cpp
-target_link_libraries(apcc PUBLIC -pg -no-pie)
+target_link_libraries(apcc PUBLIC)
 target_link_libraries(apcc PUBLIC fmt)

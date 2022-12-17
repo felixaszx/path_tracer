@@ -6,7 +6,7 @@
     "configurations": [
         {
             "preLaunchTask": "CMake: build",
-            "postDebugTask": "Profile",
+            //"postDebugTask": "Profile",
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
