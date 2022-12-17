@@ -9,20 +9,20 @@
 #include "frame.hpp"
 #include "tools.hpp"
 
-using namespace glm;
+struct Material;
 
 struct Ray
 {
-    vec3 origin_;
-    vec3 direction_;
+    glm::vec3 origin_;
+    glm::vec3 direction_;
 
-    Ray(vec3 origin, vec3 direction)
+    Ray(glm::vec3 origin, glm::vec3 direction)
         : origin_(origin),
           direction_(direction)
     {
     }
 
-    vec3 at(float t) const
+    glm::vec3 at(float t) const
     {
         return origin_ + t * direction_;
     }
@@ -31,14 +31,65 @@ struct Ray
 struct HitRecord
 {
     float t_;
-    vec3 point_;
-    vec3 normal_;
+    glm::vec3 point_;
+    glm::vec3 normal_;
+    std::shared_ptr<Material> mat_;
     bool front_face_;
 
-    inline void set_face_normal(const Ray& r, const vec3& outward_normal)
+    void set_face_normal(const Ray& r, const glm::vec3& outward_normal)
     {
         front_face_ = dot(r.direction_, outward_normal) < 0;
         normal_ = front_face_ ? outward_normal : -outward_normal;
+    }
+};
+
+struct Material
+{
+    virtual bool scatter(const Ray& r_in, const HitRecord& rec, glm::vec3& attenuation, Ray& scattered) const = 0;
+};
+
+struct lambertian : Material
+{
+    glm::vec3 albedo;
+
+    lambertian(glm::vec3 color)
+        : albedo(color)
+    {
+    }
+
+    bool scatter(const Ray& r_in, const HitRecord& record, glm::vec3& attenuation, Ray& scattered) const override
+    {
+        glm::vec3 scatter_direction = record.normal_ + glm::normalize(get_random_in_unit_sphere());
+
+        if (vec3_near_zero(scatter_direction, 1e-8f))
+        {
+            scatter_direction = record.normal_;
+        }
+
+        scattered = Ray(record.point_, scatter_direction);
+        attenuation = albedo;
+        return true;
+    }
+};
+
+struct Metal : Material
+{
+    glm::vec3 albedo;
+    float fuzz_;
+
+    Metal(glm::vec3 color, float fuzz)
+        : albedo(color),
+          fuzz_(fuzz)
+    {
+    }
+
+    bool scatter(const Ray& r_in, const HitRecord& record, glm::vec3& attenuation, Ray& scattered) const override
+    {
+        glm::vec3 reflected = glm::reflect(glm::normalize(r_in.direction_), record.normal_);
+
+        scattered = Ray(record.point_, reflected + fuzz_ * get_random_in_unit_sphere());
+        attenuation = albedo;
+        return glm::dot(scattered.direction_, record.normal_) > 0.0f;
     }
 };
 
@@ -49,18 +100,20 @@ struct HitObj
 
 struct Sphere : HitObj
 {
-    vec3 center_;
+    glm::vec3 center_;
     float radius_;
+    std::shared_ptr<Material> mat_;
 
-    Sphere(vec3 center, float radius)
+    Sphere(glm::vec3 center, float radius, std::shared_ptr<Material> mat)
         : center_(center),
-          radius_(radius)
+          radius_(radius),
+          mat_(mat)
     {
     }
 
     bool hit(const Ray& r, float min_t, float max_t, HitRecord& record) override
     {
-        vec3 oc = r.origin_ - center_;
+        glm::vec3 oc = r.origin_ - center_;
         float a = dot(r.direction_, r.direction_);
         float b = dot(r.direction_, oc);
         float c = dot(oc, oc) - radius_ * radius_;
@@ -86,6 +139,7 @@ struct Sphere : HitObj
         record.t_ = root;
         record.point_ = r.at(record.t_);
         record.normal_ = (record.point_ - center_) / radius_;
+        record.mat_ = mat_;
         return true;
     }
 };
@@ -119,13 +173,13 @@ struct Camera
     float view_w_;
     float view_h_;
     float view_focal_;
-    vec3 origin_;
+    glm::vec3 origin_;
 
-    vec3 horizontal_;
-    vec3 vertical_;
-    vec3 lower_left_;
+    glm::vec3 horizontal_;
+    glm::vec3 vertical_;
+    glm::vec3 lower_left_;
 
-    Camera(vec3 origin, float view_w, float view_h, float view_focal)
+    Camera(glm::vec3 origin, float view_w, float view_h, float view_focal)
         : origin_(origin),
           view_w_(view_w),
           view_h_(view_h),
@@ -133,7 +187,7 @@ struct Camera
     {
         horizontal_ = {view_w_, 0, 0};
         vertical_ = {0, view_h_, 0};
-        lower_left_ = origin - 0.5f * vertical_ - 0.5f * horizontal_ - vec3(0, 0, view_focal_);
+        lower_left_ = origin - 0.5f * vertical_ - 0.5f * horizontal_ - glm::vec3(0, 0, view_focal_);
     }
 
     Ray get_ray(float x, float y)
@@ -142,27 +196,38 @@ struct Camera
     }
 };
 
-vec3 cal_ray_color(const Ray& r, HitList& list)
+glm::vec3 cal_ray_color(const Ray& r, HitList& list, float depth)
 {
-    HitRecord record;
-    if (list.hit(r, 0, std::numeric_limits<float>::infinity(), record))
+    if (depth <= 0)
     {
-        return 0.5f * (record.normal_ + vec3(1, 1, 1));
+        return glm::vec3(0, 0, 0);
     }
 
-    vec3 direction = normalize(r.direction_);
+    HitRecord record;
+    if (list.hit(r, 0.001f, std::numeric_limits<float>::infinity(), record))
+    {
+        Ray scattered({}, {});
+        glm::vec3 attenuation;
+        if (record.mat_->scatter(r, record, attenuation, scattered))
+        {
+            return attenuation * cal_ray_color(scattered, list, depth - 1);
+        }
+        return glm::vec3(0, 0, 0);
+    }
+
+    glm::vec3 direction = glm::normalize(r.direction_);
     float t = 0.5 * (direction.y + 1.0f);
-    return (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
+    return (1.0f - t) * glm::vec3(1.0f, 1.0f, 1.0f) + t * glm::vec3(0.5f, 0.7f, 1.0f);
 }
 
 inline HitList list;
-
 void cal_pixel(Frame* frame, Frame::Pixel* pixel, int x, int y)
 {
     static Camera camera({0, 0, 0}, float(frame->w) / float(frame->h) * 2.0f, 2.0f, 1.0f);
-    static int samples = 10;
+    static int samples = 100;
+    static float max_depth = 50.0f;
 
-    vec3 color;
+    glm::vec3 color = {0, 0, 0};
 
     for (int i = 0; i < samples; i++)
     {
@@ -170,22 +235,29 @@ void cal_pixel(Frame* frame, Frame::Pixel* pixel, int x, int y)
         float v = float(y + get_random(-0.5f, 0.5f)) / (frame->h - 1);
 
         Ray r = camera.get_ray(u, v);
-        color += cal_ray_color(r, list);
+        color += cal_ray_color(r, list, max_depth);
     }
 
-    Frame::set_color(vec4(color / float(samples), 1.0f), pixel);
+    Frame::set_color(glm::vec4(color / float(samples), 1.0f), pixel);
 }
 
 int main(int argc, char** argv)
 {
     Frame frame(1920, 1080, 4);
 
-    list.objs.push_back(std::make_shared<Sphere>(vec3(0.0f, 0.0f, -1.0f), 0.5f));
-    list.objs.push_back(std::make_shared<Sphere>(vec3(0.0f, -100.5f, -1.0f), 100.0f));
+    auto material_ground = std::make_shared<lambertian>(glm::vec3(0.8, 0.8, 0.0));
+    auto material_center = std::make_shared<lambertian>(glm::vec3(0.7, 0.3, 0.3));
+    auto material_left = std::make_shared<Metal>(glm::vec3(0.8, 0.8, 0.8), 0.3f);
+    auto material_right = std::make_shared<Metal>(glm::vec3(0.8, 0.6, 0.2), 0.0f);
+
+    list.objs.push_back(std::make_shared<Sphere>(glm::vec3(0.0, -100.5, -1.0), 100.0, material_ground));
+    list.objs.push_back(std::make_shared<Sphere>(glm::vec3(0.0, 0.0, -1.0), 0.5, material_center));
+    list.objs.push_back(std::make_shared<Sphere>(glm::vec3(-1.0, 0.0, -1.0), 0.5, material_left));
+    list.objs.push_back(std::make_shared<Sphere>(glm::vec3(1.0, 0.0, -1.0), 0.5, material_right));
 
     Timer timer;
     timer.start();
-    frame.for_each_pixel(cal_pixel);
+    frame.for_each_pixel(cal_pixel, 10);
     std::cout << timer.finish().duration_ms << "ms" << std::endl;
 
     frame.to_png("result.png");

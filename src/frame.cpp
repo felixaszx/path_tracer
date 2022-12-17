@@ -33,58 +33,37 @@ void Frame::to_png(std::string file_name)
     stbi_flip_vertically_on_write(false);
 }
 
-void Frame::for_each_pixel(PixelFunction function, bool single_threaded)
+void Frame::for_each_pixel(PixelFunction function, int max_thread)
 {
-
-    if (single_threaded)
+    auto cal = [&](int i, int sep)
     {
-        for (int i = 0; i < 5; i++)
+        for (int y = (i + 1) * h / sep - 1; y >= i * h / sep; y--)
         {
-            for (int y = (i + 1) * h / 5 - 1; y >= i * h / 5; y--)
+            for (int x = 0; x < w; x++)
             {
-                for (int x = 0; x < w; x++)
-                {
-                    function(this, (pixels + channel * x) + y * w * channel, x, y);
-                }
+                function(this, (pixels + channel * x) + y * w * channel, x, y);
             }
         }
-    }
-    else
+    };
+
+    int curr_max_thread = 1;
+    for (int i = 1; i <= max_thread; i++)
     {
-        auto cal = [&](int i, int sep)
+        if (h % i == 0)
         {
-            for (int y = (i + 1) * h / sep - 1; y >= i * h / sep; y--)
-            {
-                for (int x = 0; x < w; x++)
-                {
-                    function(this, (pixels + channel * x) + y * w * channel, x, y);
-                }
-            }
-        };
+            curr_max_thread = i;
+        }
+    }
+    std::cout << "Cal culating pixel in " << curr_max_thread << " threads" << std::endl;
 
-        std::future<void> line_a = std::async(cal, 0, 10);
-        std::future<void> line_b = std::async(cal, 1, 10);
-        std::future<void> line_c = std::async(cal, 2, 10);
-        std::future<void> line_d = std::async(cal, 3, 10);
-        std::future<void> line_e = std::async(cal, 4, 10);
-
-        std::future<void> line_f = std::async(cal, 5, 10);
-        std::future<void> line_g = std::async(cal, 6, 10);
-        std::future<void> line_h = std::async(cal, 7, 10);
-        std::future<void> line_i = std::async(cal, 8, 10);
-        std::future<void> line_j = std::async(cal, 9, 10);
-
-        line_a.get();
-        line_b.get();
-        line_c.get();
-        line_d.get();
-        line_e.get();
-
-        line_f.get();
-        line_g.get();
-        line_h.get();
-        line_i.get();
-        line_j.get();
+    std::vector<std::future<void>> lines;
+    for (int i = 0; i < curr_max_thread; i++)
+    {
+        lines.push_back(std::async(cal, i, curr_max_thread));
+    }
+    for (int i = 0; i < curr_max_thread; i++)
+    {
+        lines[i].get();
     }
 }
 
@@ -99,7 +78,6 @@ void Frame::set_color(vec4 color, Pixel* pixel, bool linear)
     color.x = std::clamp(color.x, 0.0f, 1.0f);
     color.y = std::clamp(color.y, 0.0f, 1.0f);
     color.z = std::clamp(color.z, 0.0f, 1.0f);
-    color.w = std::clamp(color.w, 0.0f, 1.0f);
 
     for (int i = 0; i < 3; i++)
     {
@@ -108,6 +86,6 @@ void Frame::set_color(vec4 color, Pixel* pixel, bool linear)
 
     for (int i = 0; i < 4; i++)
     {
-        pixel[i] = static_cast<Pixel>(factor * color[i]);
+        pixel[i] = Pixel(factor * color[i]);
     }
 }
