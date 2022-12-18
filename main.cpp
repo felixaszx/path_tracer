@@ -48,11 +48,11 @@ struct Material
     virtual bool scatter(const Ray& r_in, const HitRecord& rec, glm::vec3& attenuation, Ray& scattered) const = 0;
 };
 
-struct lambertian : Material
+struct Lambertian : Material
 {
     glm::vec3 albedo;
 
-    lambertian(glm::vec3 color)
+    Lambertian(glm::vec3 color)
         : albedo(color)
     {
     }
@@ -326,7 +326,7 @@ int main(int argc, char** argv)
     Frame frame(1920, 1080, 4);
 
     auto material_ground = std::make_shared<Metal>(glm::vec3(0.7, 0.4, 0.7), 0.8f);
-    auto material_center = std::make_shared<lambertian>(glm::vec3(0.7, 0.3, 0.3));
+    auto material_center = std::make_shared<Lambertian>(glm::vec3(0.7, 0.3, 0.3));
     auto material_left = std::make_shared<Dielectric>(1.5f);
     auto material_right = std::make_shared<Metal>(glm::vec3(0.3, 0.3, 0.6), 0.05f);
 
