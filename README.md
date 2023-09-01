@@ -1,7 +1,7 @@
 # path_tracer
 
-##A simple yet functional cpu path tracer that can generate photo realistic image.
-##This is a learning project.
+### A simple yet functional cpu path tracer that can generate photo realistic image.
+### This is a learning project.
 
 Learning outcome:
   - Multithreaded : use in path tracing to reduce wait time
