@@ -304,7 +304,7 @@ inline HitList list;
 void cal_pixel(Frame* frame, Frame::Pixel* pixel, int x, int y)
 {
     static Camera camera({-2, 2, 1}, {0, 0, -1}, {0, 1, 0}, 8.0f, 20.0f, 16.0f / 9.0f);
-    static int samples = 100;
+    static int samples = 25;
     static int max_depth = 50;
 
     glm::vec3 color = {0, 0, 0};
